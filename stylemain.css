@@ -61,19 +61,19 @@ h1 {
   bottom: 10px;
   left: 50%;
   transform: translateX(-50%);
-  width: 95%;
-  max-width: 400px;
+  width: 100%;
+  max-width: 500px;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 10px;
   background: rgba(0,0,0,0.6);
-  border-radius: 20px;
+  border-radius: 30px;
   box-sizing: border-box;
 }
 
 .info-panel {
-  background: rgba(0,0,0,0.7);
+  background: black;
   color: #fff;
   padding: 10px;
   margin-bottom: 10px;
@@ -94,7 +94,7 @@ h1 {
   color: #000;
   border: none;
   font-size: 1.7em;
-  padding: 30px;
+  padding: 60px 30px;
   border-radius: 20px;
   cursor: pointer;
   font-weight: bold;
