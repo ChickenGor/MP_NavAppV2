@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -7,6 +8,7 @@
   <link rel="stylesheet" href="stylemain.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
+
 <body>
   <div class="mobile-container">
     <h1>Indoor Navigation</h1>
@@ -26,9 +28,13 @@
     </div>
 
     <audio id="scanSound" src="PopAlert.wav" preload="auto"></audio>
+    <audio id="micOnSound" src="mic-start.wav" preload="auto"></audio>
+    <audio id="micOffSound" src="mic-back.wav" preload="auto"></audio>
+
   </div>
 
   <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
   <script src="app.js"></script>
 </body>
+
 </html>
