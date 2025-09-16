@@ -233,8 +233,6 @@ recognition.onstart = () => {
   micOnSound.currentTime = 0;
   micOnSound.play();
 
-  // Optional speech feedback
-  speak("Microphone is now on");
 };
 
 recognition.onend = () => {
@@ -245,8 +243,6 @@ recognition.onend = () => {
   micOffSound.currentTime = 0;
   micOffSound.play();
 
-  // Optional speech feedback
-  speak("Microphone is now off");
 };
 
 
@@ -412,3 +408,4 @@ window.addEventListener("load", () => {
     }
   };
 });
+
