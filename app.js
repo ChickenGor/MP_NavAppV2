@@ -357,7 +357,7 @@ window.addEventListener("load", () => {
       })
       .catch((err) => console.error("Camera error:", err));
 
-    let lastScanned = null;
+    
 
     function processFrame() {
       if (!video || video.readyState !== 4) {
