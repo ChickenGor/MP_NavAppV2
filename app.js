@@ -27,7 +27,7 @@ fetch("map-data.json")
 
 // =================== VOICE FEEDBACK ===================
 function speak(text) {
-  console.log("Speak:", text);
+  console.log("🔊 Speak:", text);
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = "en-US";
   speechSynthesis.speak(utter);
@@ -42,8 +42,9 @@ function estimateDistance(pixelWidth) {
 function normaliseLocation(str) {
   return str
     .toLowerCase()
-    .replace(/and|end|add/g, "n") // common mishearing of “N”
-    .replace(/[^a-z0-9]/g, ""); // strip spaces and punctuation
+    .replace(/i want to go to|take me to|bring me to|go to|nearest/g, "") // remove common phrases
+    .replace(/and|end|add/g, "n") // fix mishearing of "N"
+    .replace(/[^a-z0-9]/g, ""); // strip spaces/punctuation
 }
 
 // =================== GRAPH BUILDER ===================
@@ -100,7 +101,7 @@ function findShortestPath(start, end) {
   if (path.length === 0) return speak("No path found");
 
   speak(`Shortest path: ${path.join(" → ")}`);
-  console.log("Path:", path);
+  console.log("📍 Path:", path);
 
   let i = 0;
   const stepInterval = setInterval(() => {
@@ -142,16 +143,18 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     const transcript = event.results[0][0].transcript.trim();
     voiceText.innerText = transcript;
     speak(`You said: ${transcript}`);
-    console.log("Voice recognized:", transcript);
+    console.log("🎙 Voice recognized:", transcript);
 
     const allLocations = { ...mapData.nodes, ...mapData.turnPoints };
     const normalisedKeys = Object.keys(allLocations).reduce((acc, key) => {
       acc[normaliseLocation(key)] = key;
       return acc;
     }, {});
+
     const matchedKey = resolveSynonym(
       normaliseLocation(transcript),
-      normalisedKeys
+      normalisedKeys,
+      currentLocation // ✅ pass current location
     );
 
     if (matchedKey) {
@@ -166,27 +169,34 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   recognition.onend = () => {
     voiceBtn.classList.remove("listening");
   };
+
   recognition.onerror = (e) => {
-    console.error("Voice recognition error:", e);
+    console.error("❌ Voice recognition error:", e);
     voiceBtn.classList.remove("listening");
     voiceText.innerText = "Error recognizing speech";
   };
 
-  voiceBtn.addEventListener("click", async () => {
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      voiceBtn.classList.add("listening");
-      recognition.start();
-    } catch (err) {
-      console.error("Microphone access denied:", err);
-      voiceText.innerText = "Microphone blocked!";
-      speak("Please allow microphone access");
-    }
-  });
+  if (voiceBtn) {
+    voiceBtn.addEventListener("click", async () => {
+      console.log("🎤 Voice button clicked");
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        voiceBtn.classList.add("listening");
+        recognition.start();
+      } catch (err) {
+        console.error("Microphone access denied:", err);
+        voiceText.innerText = "Microphone blocked!";
+        speak("Please allow microphone access");
+      }
+    });
+  } else {
+    console.error("❌ voiceBtn not found in DOM!");
+  }
 } else {
   voiceText.innerText = "Speech recognition not supported";
 }
 
+// =================== SYNONYMS ===================
 const synonyms = {
   MainGateway: ["main gateway", "main entrance", "main exit"],
   Staircase1: ["staircase 1", "stairs 1", "near olive cafe stairs"],
@@ -236,7 +246,7 @@ function resolveSynonym(inputKey, normalisedKeys, currentNode) {
   // check synonyms
   for (let canonical in synonyms) {
     if (synonyms[canonical].some((alt) => inputKey.includes(alt))) {
-      // Handle grouped categories
+      // grouped categories
       if (["MaleToilet1", "MaleToilet2"].includes(canonical)) {
         return findNearestNode("maletoilet", currentNode);
       }
@@ -254,14 +264,6 @@ function resolveSynonym(inputKey, normalisedKeys, currentNode) {
     }
   }
   return null;
-}
-
-function normaliseLocation(str) {
-  return str
-    .toLowerCase()
-    .replace(/i want to go to|take me to|bring me to|go to|nearest/g, "") // remove common phrases
-    .replace(/and|end|add/g, "n") // your mishearing fix
-    .replace(/[^a-z0-9]/g, ""); // strip spaces/punctuation
 }
 
 function findNearestNode(category, currentNode) {
@@ -287,7 +289,6 @@ function findNearestNode(category, currentNode) {
       nearest = node;
     }
   }
-
   return nearest;
 }
 
@@ -298,7 +299,6 @@ function playScanSound() {
 }
 
 // =================== QR SCANNER (OpenCV.js) ===================
-
 window.addEventListener("load", () => {
   console.log("Initializing QR Scanner...");
 
@@ -308,13 +308,13 @@ window.addEventListener("load", () => {
 
     const video = document.createElement("video");
     video.setAttribute("autoplay", true);
-    video.setAttribute("playsinline", true); // iOS fix
+    video.setAttribute("playsinline", true);
     document.getElementById("reader").appendChild(video);
 
     const overlay = document.getElementById("overlay");
     const ctx = overlay.getContext("2d");
 
-    // hidden canvas to grab frames
+    // hidden canvas
     const hiddenCanvas = document.createElement("canvas");
     const hiddenCtx = hiddenCanvas.getContext("2d");
 
@@ -322,7 +322,7 @@ window.addEventListener("load", () => {
       .getUserMedia({
         video: {
           facingMode: "environment",
-          width: { ideal: 960 },
+          width: { ideal: 1280 },
           height: { ideal: 720 },
         },
       })
@@ -330,9 +330,7 @@ window.addEventListener("load", () => {
         video.srcObject = stream;
 
         video.addEventListener("playing", () => {
-          console.log("Camera stream ready.");
-
-          // match hidden canvas and overlay to real video resolution
+          console.log("📷 Camera stream ready.");
           hiddenCanvas.width = video.videoWidth;
           hiddenCanvas.height = video.videoHeight;
           overlay.width = video.videoWidth;
@@ -349,7 +347,6 @@ window.addEventListener("load", () => {
         return;
       }
 
-      // draw video frame into hidden canvas
       hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
       let src = cv.imread(hiddenCanvas);
 
@@ -361,9 +358,8 @@ window.addEventListener("load", () => {
       let straightQr = new cv.Mat();
       let decodedText = qrDecoder.detectAndDecode(gray, points, straightQr);
 
-      // --- AUTO-ZOOM CROP ---
+      // AUTO-ZOOM CROP
       if (!decodedText && points.rows > 0) {
-        // Find bounding box
         let minX = Infinity,
           minY = Infinity,
           maxX = -Infinity,
@@ -377,7 +373,6 @@ window.addEventListener("load", () => {
           maxY = Math.max(maxY, y);
         }
 
-        // Crop with margin
         let margin = 20;
         minX = Math.max(minX - margin, 0);
         minY = Math.max(minY - margin, 0);
@@ -387,7 +382,6 @@ window.addEventListener("load", () => {
         let rect = new cv.Rect(minX, minY, maxX - minX, maxY - minY);
         let cropped = gray.roi(rect);
 
-        // Resize crop (zoom in 3x)
         let zoomed = new cv.Mat();
         cv.resize(
           cropped,
@@ -398,16 +392,14 @@ window.addEventListener("load", () => {
           cv.INTER_CUBIC
         );
 
-        // Try decode again
         decodedText = qrDecoder.detectAndDecode(zoomed, points, straightQr);
 
         cropped.delete();
         zoomed.delete();
       }
 
-      // --- FALLBACKS ---
+      // FALLBACKS
       if (!decodedText) {
-        // Pass 2: threshold + blur
         let thresh = new cv.Mat();
         cv.equalizeHist(gray, thresh);
         cv.GaussianBlur(thresh, thresh, new cv.Size(3, 3), 0);
@@ -425,7 +417,6 @@ window.addEventListener("load", () => {
       }
 
       if (!decodedText) {
-        // Pass 3: enlarge full frame
         let enlarged = new cv.Mat();
         cv.resize(
           gray,
@@ -439,7 +430,6 @@ window.addEventListener("load", () => {
         enlarged.delete();
       }
 
-      // Clear overlay
       ctx.clearRect(0, 0, overlay.width, overlay.height);
 
       if (decodedText && decodedText !== lastScanned) {
@@ -448,7 +438,6 @@ window.addEventListener("load", () => {
 
         playScanSound?.();
 
-        // draw green box around QR
         if (points.rows > 0) {
           ctx.beginPath();
           ctx.strokeStyle = "lime";
@@ -461,16 +450,16 @@ window.addEventListener("load", () => {
           ctx.stroke();
         }
 
-        // Action
         document.getElementById(
           "distanceInfo"
         ).innerText = `QR: ${decodedText}`;
+
         speak?.(`You are at ${decodedText}`);
+        currentLocation = decodedText; // ✅ update current location
 
         setTimeout(() => (lastScanned = null), 3000);
-      } 
+      }
 
-      // cleanup
       src.delete();
       gray.delete();
       points.delete();
@@ -480,4 +469,3 @@ window.addEventListener("load", () => {
     }
   };
 });
-
