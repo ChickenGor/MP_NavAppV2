@@ -307,9 +307,9 @@ window.addEventListener("load", () => {
     const qrDecoder = new cv.QRCodeDetector();
 
     const video = document.createElement("video");
-    video.setAttribute("autoplay", true);
-    video.setAttribute("playsinline", true);
-    document.getElementById("reader").appendChild(video);
+video.setAttribute("autoplay", true);
+video.setAttribute("playsinline", true);
+document.getElementById("reader").appendChild(video);
 
     const overlay = document.getElementById("overlay");
     const ctx = overlay.getContext("2d");
