@@ -15,20 +15,19 @@
   <div class="mobile-container">
     <h1>Indoor Navigation</h1>
 
-    <div id="reader" style="position: relative;">
-      <canvas id="overlay"></canvas>
-    </div>
+    <div id="reader-wrapper" style="position: relative; flex: 1;">
+      <div id="reader"></div>
 
-    <div class="bottom-panel">
-      <div class="info-panel">
-        <div id="distanceInfo">Distance: N/A</div>
-        <div id="voiceText">Say something...</div>
+      <!-- Overlay bottom panel on top of video -->
+      <div class="bottom-panel">
+        <div class="info-panel">
+          <div id="distanceInfo">Distance: N/A</div>
+          <div id="voiceText">Say something...</div>
+        </div>
+        <button id="voiceBtn"><i class="bi bi-mic-fill"></i></button>
       </div>
-      <button id="voiceBtn"><i class="bi bi-mic-fill"></i></button>
     </div>
   </div>
-
-
 
 
   <audio id="scanSound" src="PopAlert.wav" preload="auto"></audio>
