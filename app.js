@@ -178,9 +178,9 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 }
 
 const synonyms = {
-  "maingateway": ["mainexit", "mainentrance", "gateway", "frontgate"],
-  "maletoilet": ["menstoilet", "mentoilet", "malerestroom"],
-  "femaletoilet": ["womenstoilet", "womentoilet", "femalerestroom"]
+  "main gateway": ["main exit", "main entrance", "gateway", "front gate"],
+  "male toilet": ["mens toilet", "men toilet", "male restroom","mail toilet"],
+  "female toilet": ["womens toilet", "women toilet", "female restroom"]
 };
 
 function resolveSynonym(inputKey, normalisedKeys, currentNode) {
