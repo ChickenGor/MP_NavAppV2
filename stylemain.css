@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&display=swap');
+body {
+  margin: 0;
+  background: #222;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-family: "Funnel Sans", sans-serif;
+}
+
+.mobile-container {
+  width: 100%;
+  max-width: 500px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 25px;
+  overflow: hidden;
+  background: #111;
+  box-shadow: 0 0 20px rgba(0,0,0,0.6);
+  color: #fff;
+  
+}
+
+h1 {
+  text-align: center;
+  font-size: 1.5em;
+  margin: 10px 0;
+}
+
+#reader {
+  width: 100%;        /* fill parent width */
+  max-width: 500px;   /* optional max */
+  height: 400px;      /* the visible height of the video */
+  margin: 0 auto;     /* center horizontally */
+  background: #000;   /* fallback */
+}
+
+#reader__scan_region {
+  border: 3px solid #2b8cff;   /* change color */
+  border-radius: 20px;         /* make rounded */
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5); /* glowing effect */
+}
+
+#enableCameraBtn {
+  display:inline-block;
+  padding:0.5rem 1rem;
+  font-size:1rem;
+  background:#2b8cff;
+  color:#fff;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+}
+#enableCameraBtn:active {
+  opacity:0.7;
+}
+
+.info-panel {
+  padding: 10px;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+
+button {
+  font-size: 1.3em;
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: none;
+  background: #f3f3f3;
+  color: #000000;
+  cursor: pointer;
+  width: 100%;
+  font-family: "Funnel Sans", sans-serif;
+  font-weight: 600;
+}
+
+/* normal button style */
+#voiceBtn {
+  position: relative;
+  background: #2b8cff;
+  color: #fff;
+  border: none;
+  font-size: 1.5em;
+  padding: 14px 20px;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: box-shadow 0.3s, transform 0.3s;
+}
+
+/* pulse animation when listening */
+#voiceBtn.listening {
+  box-shadow: 0 0 0 0 rgba(43, 140, 255, 0.7);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(43, 140, 255, 0.7);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 15px rgba(43, 140, 255, 0);
+    transform: scale(1.1);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(43, 140, 255, 0);
+    transform: scale(1);
+  }
+}
+
+
+#voiceText {
+  background: #333;
+  padding: 8px;
+  border-radius: 8px;
+  min-height: 40px;
+  font-size: 1.2em;
+  font-family: "Funnel Sans", sans-serif;
+}

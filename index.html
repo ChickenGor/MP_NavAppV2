@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Indoor Navigation</title>
+<link rel="stylesheet" href="stylemain.css">
+</head>
+<body>
+
+<div class="mobile-container">
+  <h1>Indoor Navigation</h1>
+  <div id="reader" style="position: relative;">
+  <canvas id="overlay" style="position:absolute;top:0;left:0;"></canvas>
+</div>
+  
+  <div class="info-panel">
+    <div id="distanceInfo">Distance: N/A</div>
+    <div id="voiceText">Say something...</div>
+  </div>
+
+  <div class="controls">
+    <button id="setDestination">Set Destination</button>
+    <button id="voiceBtn">Press to Speak</button>
+  </div>
+</div>
+<audio id="scanSound" src="PopAlert.wav" preload="auto"></audio>
+
+<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Map Editor + Dijkstra Pathfinding</title>
+<style>
+  :root{
+    --accent:#2b8cff; --danger:#e74c3c; --muted:#6b7280; --bg:#f6f8fb;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);}
+  body{display:flex;gap:0}
+
+  .map-container{flex:1;height:100vh;border-right:1px solid #e6eef6;background:#fff;position:relative}
+  .map-container svg{width:100%;height:100%;display:block;cursor:crosshair}
+
+  .sidebar{width:340px;padding:14px;box-sizing:border-box;background:#fff;display:flex;flex-direction:column;gap:12px}
+  .row{display:flex;gap:8px}
+  button{font-size:13px;padding:8px 10px;border-radius:8px;border:0;cursor:pointer}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-danger{background:var(--danger);color:#fff}
+  .btn-muted{background:var(--muted);color:#fff}
+  .panel{padding:10px;border-radius:8px;border:1px solid #eef4fb;background:linear-gradient(180deg,#fff,#fbfdff)}
+  .panel h4{margin:0 0 8px;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+  .list{max-height:30vh;overflow:auto;padding:6px;border-radius:6px;background:#fff;border:1px solid #f0f4fb}
+  .item{display:flex;align-items:center;justify-content:space-between;padding:6px;border-radius:6px;margin-bottom:6px;background:#fbfdff}
+  .meta{display:flex;flex-direction:column;font-size:13px}
+  .meta small{color:#6b7280}
+  .controls{display:flex;gap:6px}
+  .selected{background:#e6f7ff}
+  .hint{font-size:12px;color:#6b7280}
+  .node-label{font-size:12px;fill:var(--accent);stroke:white;stroke-width:.5px;paint-order:stroke;font-weight:600;pointer-events:none}
+  .turnpoint-label{font-size:11px;fill:#6b7280;stroke:white;stroke-width:.5px;paint-order:stroke;pointer-events:none}
+  .small{font-size:12px;color:#6b7280}
+  .input, select{padding:6px;border-radius:6px;border:1px solid #e6eefc;font-size:13px}
+</style>
+</head>
+<body>
+
+  <div class="map-container" id="mapContainer"></div>
+
+  <div class="sidebar">
+    <div class="row">
+      <button class="btn-primary" id="undoBtn" title="Undo (Ctrl/Cmd+Z)">Undo</button>
+      <button class="btn-primary" id="redoBtn" title="Redo (Ctrl+Y)">Redo</button>
+      <button class="btn-muted" id="tpToggle">+ Turn Point</button>
+    </div>
+
+    <div class="panel">
+      <h4>Editor Controls</h4>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button id="addNodeHint" class="btn-primary">Add Node (click map)</button>
+        <button id="downloadBtn">Download JSON</button>
+        <button id="loadBtn">Load JSON</button>
+<input type="file" id="fileInput" accept="application/json" style="display:none">
+        <div class="hint">Click map to add Node (you'll be prompted for a name). Toggle Turn Point to add T1/T2... by clicking the map.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h4>Nodes</h4>
+      <div id="nodesList" class="list"></div>
+    </div>
+
+    <div class="panel">
+      <h4>Turn Points</h4>
+      <div id="turnsList" class="list"></div>
+    </div>
+
+    <div class="panel">
+      <h4>Pathfinding Test</h4>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label class="small">From</label>
+        <select id="fromSelect" class="input"></select>
+        <label class="small">To</label>
+        <select id="toSelect" class="input"></select>
+        <button id="findBtn" class="btn-primary">Find Shortest Path</button>
+        <div id="pathResult" class="small"></div>
+      </div>
+    </div>
+
+    <div style="margin-top:auto" class="small">Shortcuts: <strong>Ctrl/Cmd+Z</strong> Undo • <strong>Ctrl+Y</strong> Redo</div>
+  </div>
+
+<script src="https://unpkg.com/svg-pan-zoom/dist/svg-pan-zoom.min.js"></script>
+<script>
+/* --- Data --- */
+let nodes = {};        // {name: {x,y}}
+let turnPoints = {};   // {T1: {x,y}}
+let edges = [];        // [{id, from, to, waypoints: [{x,y}]}]  where from/to are names (node or Txx)
+
+/* --- Undo/Redo as snapshot of full state (simple & robust) --- */
+let undoStack = [];
+let redoStack = [];
+function pushSnapshot(){
+  undoStack.push(JSON.stringify({nodes, turnPoints, edges}));
+  if(undoStack.length>200) undoStack.shift();
+  redoStack = [];
+  updateUndoButtons();
+}
+function restoreSnapshot(snap){
+  const obj = JSON.parse(snap);
+  nodes = obj.nodes || {};
+  turnPoints = obj.turnPoints || {};
+  edges = obj.edges || [];
+  redrawAll();
+  updateListsAndPathDropdowns();
+}
+function undo(){
+  if(!undoStack.length) return;
+  const snap = undoStack.pop();
+  redoStack.push(JSON.stringify({nodes, turnPoints, edges}));
+  restoreSnapshot(snap);
+  updateUndoButtons();
+}
+function redo(){
+  if(!redoStack.length) return;
+  const snap = redoStack.pop();
+  undoStack.push(JSON.stringify({nodes, turnPoints, edges}));
+  restoreSnapshot(snap);
+  updateUndoButtons();
+}
+function updateUndoButtons(){
+  document.getElementById('undoBtn').disabled = undoStack.length===0;
+  document.getElementById('redoBtn').disabled = redoStack.length===0;
+}
+
+/* --- SVG layers --- */
+let nodesLayer, turnLayer, edgesLayer, tempLayer;
+let selectedForConnect = null; // {type:'node'|'turn', id}
+let pendingWaypoints = [];
+let addingTurnPoint = false;
+let turnCounter = 1;
+let highlightedElems = [];
+
+// load SVG map
+fetch('UTAR-Block-N.svg').then(r=>r.text()).then(svgText=>{
+  document.getElementById('mapContainer').innerHTML = svgText;
+  const svg = document.querySelector('#mapContainer svg');
+
+  // init pan/zoom
+  svgPanZoom(svg, {zoomEnabled:true, controlIconsEnabled:true, fit:true, center:true, minZoom:0.5, maxZoom:10});
+
+  const viewport = svg.querySelector('.svg-pan-zoom_viewport') || svg;
+  const ns = 'http://www.w3.org/2000/svg';
+  edgesLayer = document.createElementNS(ns,'g'); edgesLayer.setAttribute('id','edgesLayer');
+  tempLayer  = document.createElementNS(ns,'g'); tempLayer.setAttribute('id','tempLayer');
+  nodesLayer = document.createElementNS(ns,'g'); nodesLayer.setAttribute('id','nodesLayer');
+  turnLayer  = document.createElementNS(ns,'g'); turnLayer.setAttribute('id','turnLayer');
+
+  viewport.appendChild(edgesLayer);
+  viewport.appendChild(tempLayer);
+  viewport.appendChild(nodesLayer);
+  viewport.appendChild(turnLayer);
+
+  // events
+  svg.addEventListener('click', svgClickHandler);
+  nodesLayer.addEventListener('click', layerClickHandler);
+  turnLayer.addEventListener('click', layerClickHandler);
+
+  document.getElementById('tpToggle').addEventListener('click', ()=> {
+    addingTurnPoint = !addingTurnPoint;
+    document.getElementById('tpToggle').textContent = addingTurnPoint ? "Turn Point: ON" : "+ Turn Point";
+  });
+  document.getElementById('downloadBtn').addEventListener('click', downloadData);
+  document.getElementById('undoBtn').addEventListener('click', undo);
+  document.getElementById('redoBtn').addEventListener('click', redo);
+  document.getElementById('findBtn').addEventListener('click', findPath);
+
+  // keyboard shortcuts
+  document.addEventListener('keydown', e=>{
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z'){ undo(); e.preventDefault(); }
+    if((e.ctrlKey||e.metaKey) && (e.key.toLowerCase()==='y' || (e.shiftKey && e.key.toLowerCase()==='z'))){ redo(); e.preventDefault(); }
+  });
+
+  // initial UI update
+  updateListsAndPathDropdowns();
+});
+
+// --- Helper: map screen -> svg coords (use viewport transform) ---
+function getSVGPoint(evt){
+  const svg = document.querySelector('#mapContainer svg');
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX; pt.y = evt.clientY;
+  const viewport = svg.querySelector('.svg-pan-zoom_viewport') || svg;
+  const ctm = viewport.getScreenCTM().inverse();
+  const sp = pt.matrixTransform(ctm);
+  return {x: sp.x, y: sp.y};
+}
+
+// --- Drawing helpers ---
+function drawNodeOnMap(name, x, y){
+  const ns = 'http://www.w3.org/2000/svg';
+  const c = document.createElementNS(ns,'circle');
+  c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 6);
+  c.setAttribute('fill', 'var(--accent)'); c.setAttribute('stroke','white'); c.setAttribute('stroke-width','1.2');
+  c.setAttribute('data-node', name); c.setAttribute('style','cursor:pointer');
+  const t = document.createElementNS(ns,'text');
+  t.setAttribute('x', x+10); t.setAttribute('y', y+4); t.setAttribute('class','node-label');
+  t.textContent = name; t.setAttribute('data-node', name);
+  nodesLayer.appendChild(c); nodesLayer.appendChild(t);
+}
+function drawTurnOnMap(id, x, y){
+  const ns = 'http://www.w3.org/2000/svg';
+  const c = document.createElementNS(ns,'circle');
+  c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 4);
+  c.setAttribute('fill', '#6b7280'); c.setAttribute('stroke','white'); c.setAttribute('stroke-width','1');
+  c.setAttribute('data-turn', id); c.setAttribute('style','cursor:pointer;opacity:0.95');
+  const t = document.createElementNS(ns,'text');
+  t.setAttribute('x', x+8); t.setAttribute('y', y+4); t.setAttribute('class','turnpoint-label');
+  t.textContent = id; t.setAttribute('data-turn', id);
+  turnLayer.appendChild(c); turnLayer.appendChild(t);
+}
+function drawEdgeOnMap(edge, cssClass=''){
+  const ns = 'http://www.w3.org/2000/svg';
+  const pts = [];
+  const from = getVertex(edge.from);
+  const to = getVertex(edge.to);
+  if(!from || !to) return null;
+  pts.push(`${from.x},${from.y}`);
+  (edge.waypoints||[]).forEach(p=>pts.push(`${p.x},${p.y}`));
+  pts.push(`${to.x},${to.y}`);
+  const poly = document.createElementNS(ns,'polyline');
+  poly.setAttribute('points', pts.join(' '));
+  poly.setAttribute('stroke', cssClass==='highlight' ? 'red' : 'green');
+  poly.setAttribute('stroke-width', cssClass==='highlight' ? 3 : 2);
+  poly.setAttribute('fill', 'none'); poly.setAttribute('data-edge-id', edge.id);
+  if(cssClass) poly.classList.add(cssClass);
+  edgesLayer.appendChild(poly);
+  return poly;
+}
+function drawTempWP(x,y){
+  const ns='http://www.w3.org/2000/svg';
+  const c = document.createElementNS(ns,'circle');
+  c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',3);
+  c.setAttribute('fill','orange'); c.classList.add('temp-wp');
+  tempLayer.appendChild(c);
+}
+function clearTempWP(){ tempLayer.querySelectorAll('.temp-wp').forEach(e=>e.remove()); }
+function clearHighlight(){ highlightedElems.forEach(e=>e.remove()); highlightedElems=[]; }
+
+// --- Utilities ---
+function getVertex(name){ return nodes[name] || turnPoints[name]; }
+function makeEdgeId(){ return 'E' + Date.now() + Math.floor(Math.random()*1000); }
+
+// --- UI: lists & dropdowns ---
+function updateListsAndPathDropdowns(){
+  const nodesList = document.getElementById('nodesList');
+  nodesList.innerHTML = '';
+  Object.entries(nodes).forEach(([name,pos])=>{
+    const div = document.createElement('div'); div.className='item';
+    const meta = document.createElement('div'); meta.className='meta';
+    meta.innerHTML = `<strong>${name}</strong><small>${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}</small>`;
+    const controls = document.createElement('div'); controls.className='controls';
+    const conn = document.createElement('button'); conn.className='btn-primary'; conn.textContent='Connect';
+    conn.onclick = ()=> selectForConnect(name);
+    const del = document.createElement('button'); del.className='btn-danger'; del.textContent='Delete';
+    del.onclick = ()=> { deleteNode(name); pushSnapshot(); };
+    controls.append(conn, del);
+    div.appendChild(meta); div.appendChild(controls);
+    nodesList.appendChild(div);
+  });
+
+  const turnsList = document.getElementById('turnsList');
+  turnsList.innerHTML = '';
+  Object.entries(turnPoints).forEach(([id,pos])=>{
+    const div = document.createElement('div'); div.className='item';
+    const meta = document.createElement('div'); meta.className='meta';
+    meta.innerHTML = `<strong>${id}</strong><small>${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}</small>`;
+    const controls = document.createElement('div'); controls.className='controls';
+    const conn = document.createElement('button'); conn.className='btn-primary'; conn.textContent='Connect';
+    conn.onclick = ()=> selectForConnect(id, true);
+    const del = document.createElement('button'); del.className='btn-danger'; del.textContent='Delete';
+    del.onclick = ()=> { deleteTurnPoint(id); pushSnapshot(); };
+    controls.append(conn, del);
+    div.appendChild(meta); div.appendChild(controls);
+    turnsList.appendChild(div);
+  });
+
+  // path dropdowns
+  const fromSel = document.getElementById('fromSelect');
+  const toSel = document.getElementById('toSelect');
+  fromSel.innerHTML = ''; toSel.innerHTML = '';
+  const all = {...nodes, ...turnPoints};
+  Object.keys(all).forEach(name=>{
+    const o1 = document.createElement('option'); o1.value = name; o1.textContent = name; fromSel.appendChild(o1);
+    const o2 = document.createElement('option'); o2.value = name; o2.textContent = name; toSel.appendChild(o2);
+  });
+
+  // redraw map elements
+  redrawAll();
+}
+
+// redrawing full map from current data
+function redrawAll(){
+  // clear layers
+  edgesLayer.innerHTML = ''; nodesLayer.innerHTML = ''; turnLayer.innerHTML = ''; tempLayer.innerHTML = '';
+  // draw edges first
+  edges.forEach(e=> drawEdgeOnMap(e));
+  // draw nodes and turns
+  Object.entries(nodes).forEach(([n,p])=> drawNodeOnMap(n,p.x,p.y));
+  Object.entries(turnPoints).forEach(([t,p])=> drawTurnOnMap(t,p.x,p.y));
+}
+
+// --- Event handlers: svg click / layer click ---
+function svgClickHandler(evt){
+  if(evt.target.closest('.svg-pan-zoom-control')) return;
+  const pt = getSVGPoint(evt);
+
+  if(addingTurnPoint){
+    const id = 'T' + turnCounter++;
+    turnPoints[id] = {x:pt.x,y:pt.y};
+    pushSnapshot();
+    updateListsAndPathDropdowns();
+    return;
+  }
+
+  // if connecting, add waypoint
+  if(selectedForConnect){
+    pendingWaypoints.push({x:pt.x,y:pt.y});
+    drawTempWP(pt.x,pt.y);
+    return;
+  }
+
+  // else add node
+  const name = prompt('Enter node name:');
+  if(!name) return;
+  if(nodes[name] || turnPoints[name]){ alert('Name already used'); return; }
+  nodes[name] = {x:pt.x,y:pt.y};
+  pushSnapshot();
+  updateListsAndPathDropdowns();
+}
+
+// clicking existing node/turn on map to finish connection
+function layerClickHandler(evt){
+  const nd = evt.target.getAttribute('data-node');
+  const tr = evt.target.getAttribute('data-turn');
+
+  if(!selectedForConnect) return; // not connecting
+  if(nd){
+    finishConnection(selectedForConnect, {type:'node', id:nd});
+  } else if(tr){
+    finishConnection(selectedForConnect, {type:'turn', id:tr});
+  }
+  evt.stopPropagation();
+}
+
+// selecting from sidebar to start/finish connect
+function selectForConnect(id, isTurn=false){
+  const type = isTurn ? 'turn' : 'node';
+  if(!selectedForConnect){
+    selectedForConnect = {type, id};
+    pendingWaypoints = [];
+    clearTempWP();
+    // visually mark selected in lists by re-rendering (selected not tracked visually in code to keep small)
+  } else {
+    // if clicking same -> cancel
+    if(selectedForConnect.type===type && selectedForConnect.id===id){
+      selectedForConnect = null; pendingWaypoints=[]; clearTempWP();
+      return;
+    }
+    finishConnection(selectedForConnect, {type, id});
+  }
+}
+
+// finish connection: start & target objects {type, id}
+function finishConnection(start, target){
+  if(!start || !target) return;
+  // compute edge object
+  const edge = {
+    id: makeEdgeId(),
+    from: start.id,
+    to: target.id,
+    waypoints: [...pendingWaypoints]
+  };
+  edges.push(edge);
+  drawEdgeOnMap(edge);
+  pushSnapshot();
+  // reset
+  selectedForConnect = null;
+  pendingWaypoints = [];
+  clearTempWP();
+  updateListsAndPathDropdowns();
+}
+
+// delete operations
+function deleteNode(name){
+  // remove edges referencing it
+  edges = edges.filter(e => e.from !== name && e.to !== name);
+  delete nodes[name];
+  updateListsAndPathDropdowns();
+}
+function deleteTurnPoint(id){
+  edges = edges.filter(e => e.from !== id && e.to !== id);
+  delete turnPoints[id];
+  updateListsAndPathDropdowns();
+}
+
+// --- Pathfinding (Dijkstra) ---
+function buildGraph(){
+  // graph: adjacency map of name -> [{to, dist, edgeId, waypoints}]
+  const graph = {};
+  // ensure all vertices exist
+  Object.keys(nodes).forEach(n=>graph[n]=[]);
+  Object.keys(turnPoints).forEach(t=>graph[t]=[]);
+  edges.forEach(e=>{
+    const a = e.from, b = e.to;
+    const d = computeEdgeDistance(e);
+    if(!graph[a]) graph[a]=[]; if(!graph[b]) graph[b]=[];
+    graph[a].push({to:b, dist:d, edgeId:e.id, waypoints:e.waypoints});
+    graph[b].push({to:a, dist:d, edgeId:e.id, waypoints: [...(e.waypoints||[])].slice().reverse()});
+  });
+  return graph;
+}
+function computeEdgeDistance(e){
+  const pts = [];
+  pts.push(getVertex(e.from));
+  (e.waypoints||[]).forEach(p=>pts.push(p));
+  pts.push(getVertex(e.to));
+  let dist = 0;
+  for(let i=0;i<pts.length-1;i++){
+    const dx = pts[i+1].x-pts[i].x, dy = pts[i+1].y-pts[i].y;
+    dist += Math.hypot(dx,dy);
+  }
+  return dist;
+}
+
+function dijkstra(graph, start, goal){
+  // min-heap w/ simple array
+  const dist = {}; const prev = {};
+  const Q = new Set(Object.keys(graph));
+  Object.keys(graph).forEach(v=>{ dist[v]=Infinity; prev[v]=null; });
+  dist[start]=0;
+
+  while(Q.size){
+    // extract min
+    let u = null; let best = Infinity;
+    Q.forEach(v=>{ if(dist[v]<best){ best=dist[v]; u=v;} });
+    if(u===null || best===Infinity) break;
+    Q.delete(u);
+    if(u===goal) break;
+    for(const nb of graph[u]){
+      if(!Q.has(nb.to)) continue;
+      const alt = dist[u] + nb.dist;
+      if(alt < dist[nb.to]){ dist[nb.to]=alt; prev[nb.to]=u; }
+    }
+  }
+  if(!prev[goal] && start!==goal) return {path:null, cost:Infinity};
+  // reconstruct path
+  const path = []; let cur = goal;
+  while(cur!==null){ path.unshift(cur); cur = prev[cur]; }
+  return {path, cost: dist[goal]};
+}
+
+function findPath(){
+  clearHighlight();
+  highlightedElems = [];
+  const from = document.getElementById('fromSelect').value;
+  const to = document.getElementById('toSelect').value;
+  if(!from || !to){ document.getElementById('pathResult').textContent = 'Select both endpoints.'; return; }
+  if(from===to){ document.getElementById('pathResult').textContent = 'From and To are same.'; return; }
+
+  const graph = buildGraph();
+  const {path, cost} = dijkstra(graph, from, to);
+  if(!path){ document.getElementById('pathResult').textContent = 'No path found.'; return; }
+
+  // draw highlighted edges along path
+  for(let i=0;i<path.length-1;i++){
+    const a = path[i], b = path[i+1];
+    // find edge
+    const e = edges.find(edge => (edge.from===a && edge.to===b) || (edge.from===b && edge.to===a));
+    if(e){
+      const el = drawEdgeOnMap(e, 'highlight');
+      if(el) highlightedElems.push(el);
+    }
+  }
+  document.getElementById('pathResult').textContent = `Shortest path: ${path.join(' → ')} (Cost: ${cost.toFixed(1)})`;
+}
+
+/* --- Misc UI actions --- */
+document.getElementById('downloadBtn').addEventListener('click', downloadData);
+
+function downloadData(){
+  const out = {nodes, turnPoints, edges};
+  const blob = new Blob([JSON.stringify(out,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'map-data.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* --- When data changes (nodes/turns/edges), call: updateListsAndPathDropdowns() and pushSnapshot() --- */
+/* We push snapshot in actions where appropriate above */
+// open file picker when button clicked
+document.getElementById('loadBtn').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+
+// handle file selection
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    try {
+      const data = JSON.parse(evt.target.result);
+      // overwrite current state
+      nodes = data.nodes || {};
+      turnPoints = data.turnPoints || {};
+      edges = data.edges || [];
+      pushSnapshot(); // so you can undo back to this state
+      updateListsAndPathDropdowns();
+    } catch(err) {
+      alert('Invalid JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Map QR Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  body {
+    font-family: sans-serif;
+    background: #f0f0f0;
+    margin: 0;
+    padding: 20px;
+  }
+  h1 { text-align: center; }
+  .container { display: flex; gap: 20px; flex-wrap: wrap; }
+  .node-list {
+    width: 200px;
+    background: #fff;
+    padding: 10px;
+    border-radius: 10px;
+    overflow-y: auto;
+    max-height: 80vh;
+  }
+  .node-list button {
+    width: 100%;
+    margin: 5px 0;
+    padding: 8px;
+    border: none;
+    border-radius: 5px;
+    background: #2b8cff;
+    color: #fff;
+    cursor: pointer;
+  }
+  .qrcode-preview {
+    flex: 1;
+    background: #fff;
+    padding: 20px;
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .qrcode-preview h2 { margin-bottom: 15px; }
+</style>
+</head>
+<body>
+
+<h1>Map QR Generator</h1>
+<div class="container">
+  <div class="node-list" id="nodeList">
+    <h3>Locations</h3>
+  </div>
+  <div class="qrcode-preview">
+    <h2 id="qrTitle">Select a location</h2>
+    <div id="qrcode"></div>
+  </div>
+</div>
+
+<script>
+// Load map-data.json
+let mapData = {};
+fetch('map-data.json')
+  .then(res => res.json())
+  .then(data => {
+    mapData = data;
+    populateNodes();
+  })
+  .catch(err => alert("Failed to load map-data.json"));
+
+// Populate buttons for each node & turnPoint
+function populateNodes() {
+  const container = document.getElementById('nodeList');
+  const allKeys = [...Object.keys(mapData.nodes), ...Object.keys(mapData.turnPoints)];
+  
+  allKeys.forEach(key => {
+    const btn = document.createElement('button');
+    btn.innerText = key;
+    btn.addEventListener('click', () => generateQRCode(key));
+    container.appendChild(btn);
+  });
+}
+
+// Generate QR code for selected node
+function generateQRCode(nodeId) {
+  const qrContainer = document.getElementById("qrcode");
+  qrContainer.innerHTML = ""; // clear previous
+  document.getElementById("qrTitle").innerText = nodeId;
+
+  new QRCode(qrContainer, {
+    text: nodeId,
+    width: 200,
+    height: 200,
+    colorDark: "#000000",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.H
+  });
+}
+</script>
+
+</body>
+</html>
