@@ -11,6 +11,7 @@ const voiceText = document.getElementById("voiceText");
 
 let recognition;
 let lastScanned = null;
+let micStream = null;
 
 // =================== MAP LOADING ===================
 fetch("map-data.json")
@@ -178,22 +179,27 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
 
   if (voiceBtn) {
     voiceBtn.addEventListener("click", async () => {
-      console.log("🎤 Voice button clicked");
+      voiceBtn.classList.add("listening");
+      voiceText.innerText = "Listening...";
+
       try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        voiceBtn.classList.add("listening");
+        if (!micStream) {
+          micStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+          console.log("✅ Microphone granted");
+        }
         recognition.start();
       } catch (err) {
-        console.error("Microphone access denied:", err);
+        console.error("❌ Microphone access denied:", err);
         voiceText.innerText = "Microphone blocked!";
-        speak("Please allow microphone access");
+        speak("Please allow microphone access and reload the page");
+        voiceBtn.classList.remove("listening");
       }
     });
   } else {
     console.error("❌ voiceBtn not found in DOM!");
   }
-} else {
-  voiceText.innerText = "Speech recognition not supported";
 }
 
 // =================== SYNONYMS ===================
@@ -307,9 +313,9 @@ window.addEventListener("load", () => {
     const qrDecoder = new cv.QRCodeDetector();
 
     const video = document.createElement("video");
-video.setAttribute("autoplay", true);
-video.setAttribute("playsinline", true);
-document.getElementById("reader").appendChild(video);
+    video.setAttribute("autoplay", true);
+    video.setAttribute("playsinline", true);
+    document.getElementById("reader").appendChild(video);
 
     const overlay = document.getElementById("overlay");
     const ctx = overlay.getContext("2d");
