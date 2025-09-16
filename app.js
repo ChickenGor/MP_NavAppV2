@@ -243,9 +243,11 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     voiceBtn.classList.remove("listening");
     micOffSound.currentTime = 0;
     micOffSound.play();
-    voiceText.innerText = currentLocation
-      ? `You are at ${currentLocation}`
-      : "Say something...";
+
+    // Only set location if voiceText is still showing "Listening..."
+    if (voiceText.innerText === "Listening..." && currentLocation) {
+      voiceText.innerText = `You are at ${currentLocation}`;
+    }
   };
 
   recognition.onresult = (event) => {
@@ -275,6 +277,12 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     } else {
       speak(`${transcript} is not recognized.`);
     }
+
+    // Restore location text after 2 seconds
+    setTimeout(() => {
+      if (!recognizing && currentLocation)
+        voiceText.innerText = `You are at ${currentLocation}`;
+    }, 2000);
   };
 
   voiceBtn?.addEventListener("click", () => {
@@ -297,7 +305,10 @@ function playScanSound() {
 
 // =================== QR SCANNER ===================
 window.addEventListener("load", () => {
+  console.log("Initializing QR Scanner...");
+
   cv["onRuntimeInitialized"] = () => {
+    console.log("OpenCV ready, starting camera...");
     const qrDecoder = new cv.QRCodeDetector();
 
     const video = document.createElement("video");
@@ -355,6 +366,8 @@ window.addEventListener("load", () => {
 
         playScanSound();
         speak(`You are at ${decodedText}`);
+
+        // Update info text to current location
         voiceText.innerText = `You are at ${decodedText}`;
 
         if (points.rows > 0) {
@@ -369,6 +382,7 @@ window.addEventListener("load", () => {
           ctx.stroke();
         }
 
+        // Wait 3 seconds before allowing the same QR again
         setTimeout(() => {
           lastScanned = null;
         }, 3000);
