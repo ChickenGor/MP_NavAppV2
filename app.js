@@ -69,7 +69,9 @@ function dijkstra(graph, start, end) {
   distances[start] = 0;
 
   while (pq.size > 0) {
-    let current = [...pq].reduce((a, b) => (distances[a] < distances[b] ? a : b));
+    let current = [...pq].reduce((a, b) =>
+      distances[a] < distances[b] ? a : b
+    );
     pq.delete(current);
     if (current === end) break;
 
@@ -185,7 +187,11 @@ function resolveSynonym(inputKey, normalisedKeys, currentNode) {
         return findNearestNode("maletoilet", currentNode);
       if (["FemaleToilet1", "FemaleToilet2"].includes(canonical))
         return findNearestNode("femaletoilet", currentNode);
-      if (["Staircase1", "Staircase2", "Staircase3", "Staircase4"].includes(canonical))
+      if (
+        ["Staircase1", "Staircase2", "Staircase3", "Staircase4"].includes(
+          canonical
+        )
+      )
         return findNearestNode("staircase", currentNode);
       return normalisedKeys[canonical] || canonical;
     }
@@ -196,8 +202,10 @@ function resolveSynonym(inputKey, normalisedKeys, currentNode) {
 function findNearestNode(category, currentNode) {
   let candidates = [];
   if (category === "maletoilet") candidates = ["MaleToilet1", "MaleToilet2"];
-  else if (category === "femaletoilet") candidates = ["FemaleToilet1", "FemaleToilet2"];
-  else if (category === "staircase") candidates = ["Staircase1", "Staircase2", "Staircase3", "Staircase4"];
+  else if (category === "femaletoilet")
+    candidates = ["FemaleToilet1", "FemaleToilet2"];
+  else if (category === "staircase")
+    candidates = ["Staircase1", "Staircase2", "Staircase3", "Staircase4"];
 
   if (!currentNode || candidates.length === 0) return null;
 
@@ -215,7 +223,8 @@ function findNearestNode(category, currentNode) {
 
 // =================== VOICE RECOGNITION ===================
 if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SpeechRecognition();
   recognition.continuous = false;
   recognition.lang = "en-US";
@@ -234,18 +243,20 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     voiceBtn.classList.remove("listening");
     micOffSound.currentTime = 0;
     micOffSound.play();
-  };
 
-  recognition.onerror = (e) => {
-    console.error("❌ Voice recognition error:", e);
-    voiceText.innerText = "Error recognizing speech";
+    // Revert info text back to current location after mic stops
+    if (currentLocation) voiceText.innerText = `You are at ${currentLocation}`;
+    else voiceText.innerText = "Say something...";
   };
 
   recognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript.trim();
-    voiceText.innerText = transcript;
-    speak(`You said: ${transcript}`);
     console.log("🎙 Voice recognized:", transcript);
+
+    // Only show transcript temporarily
+    voiceText.innerText = `You said: ${transcript}`;
+
+    speak(`You said: ${transcript}`);
 
     const allLocations = { ...mapData.nodes, ...mapData.turnPoints };
     const normalisedKeys = Object.keys(allLocations).reduce((acc, key) => {
@@ -253,7 +264,11 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
       return acc;
     }, {});
 
-    const matchedKey = resolveSynonym(normaliseLocation(transcript), normalisedKeys, currentLocation);
+    const matchedKey = resolveSynonym(
+      normaliseLocation(transcript),
+      normalisedKeys,
+      currentLocation
+    );
 
     if (matchedKey) {
       destination = matchedKey;
@@ -262,6 +277,12 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     } else {
       speak(`${transcript} is not recognized.`);
     }
+
+    // Restore info text back to location after a short delay
+    setTimeout(() => {
+      if (!recognizing && currentLocation)
+        voiceText.innerText = `You are at ${currentLocation}`;
+    }, 2000);
   };
 
   voiceBtn?.addEventListener("click", () => {
@@ -302,7 +323,13 @@ window.addEventListener("load", () => {
     const hiddenCtx = hiddenCanvas.getContext("2d");
 
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } })
+      .getUserMedia({
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      })
       .then((stream) => {
         video.srcObject = stream;
         video.addEventListener("playing", () => {
@@ -336,8 +363,12 @@ window.addEventListener("load", () => {
         lastScanned = decodedText;
         currentLocation = decodedText;
         console.log("✅ QR detected:", decodedText);
+
         playScanSound();
         speak(`You are at ${decodedText}`);
+
+        // Update info text to current location
+        voiceText.innerText = `You are at ${decodedText}`;
 
         if (points.rows > 0) {
           ctx.beginPath();
@@ -351,7 +382,10 @@ window.addEventListener("load", () => {
           ctx.stroke();
         }
 
-        setTimeout(() => { lastScanned = null; }, 3000);
+        // Wait 3 seconds before allowing the same QR again
+        setTimeout(() => {
+          lastScanned = null;
+        }, 3000);
       }
 
       src.delete();
