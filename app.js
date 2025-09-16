@@ -172,9 +172,16 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     voiceText.innerText = "Error recognizing speech";
   };
 
-  voiceBtn.addEventListener("click", () => {
-    voiceBtn.classList.add("listening");
-    recognition.start();
+  voiceBtn.addEventListener("click", async () => {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceBtn.classList.add("listening");
+      recognition.start();
+    } catch (err) {
+      console.error("Microphone access denied:", err);
+      voiceText.innerText = "Microphone blocked!";
+      speak("Please allow microphone access");
+    }
   });
 } else {
   voiceText.innerText = "Speech recognition not supported";
@@ -229,9 +236,19 @@ function resolveSynonym(inputKey, normalisedKeys, currentNode) {
   // check synonyms
   for (let canonical in synonyms) {
     if (synonyms[canonical].some((alt) => inputKey.includes(alt))) {
-      // If this is a group (toilet/staircase), find nearest
-      if (canonical === "maletoilet" || canonical === "staircase") {
-        return findNearestNode(canonical, currentNode);
+      // Handle grouped categories
+      if (["MaleToilet1", "MaleToilet2"].includes(canonical)) {
+        return findNearestNode("maletoilet", currentNode);
+      }
+      if (["FemaleToilet1", "FemaleToilet2"].includes(canonical)) {
+        return findNearestNode("femaletoilet", currentNode);
+      }
+      if (
+        ["Staircase1", "Staircase2", "Staircase3", "Staircase4"].includes(
+          canonical
+        )
+      ) {
+        return findNearestNode("staircase", currentNode);
       }
       return normalisedKeys[canonical] || canonical;
     }
