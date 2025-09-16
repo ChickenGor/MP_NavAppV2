@@ -101,20 +101,56 @@ function findShortestPath(start, end) {
   const path = dijkstra(graph, start, end);
   if (path.length === 0) return speak("No path found");
 
-  speak(`Shortest path: ${path.join(" → ")}`);
   console.log("📍 Path:", path);
 
+  const steps = [];
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const from = path[i];
+    const to = path[i + 1];
+    const fromPos = mapData.nodes[from] || mapData.turnPoints[from];
+    const toPos = mapData.nodes[to] || mapData.turnPoints[to];
+
+    // Determine direction
+    let direction = "Go";
+    if (i < path.length - 2) {
+      const next = path[i + 2];
+      const nextPos = mapData.nodes[next] || mapData.turnPoints[next];
+
+      const angle = Math.atan2(nextPos.y - toPos.y, nextPos.x - toPos.x) -
+                    Math.atan2(toPos.y - fromPos.y, toPos.x - fromPos.x);
+      const deg = (angle * 180) / Math.PI;
+
+      if (deg > 45) direction = "Turn left";
+      else if (deg < -45) direction = "Turn right";
+      else direction = "Go straight";
+    }
+
+    // Only announce meaningful steps (turns, stairs, or destination)
+    const isImportant =
+      to.startsWith("Staircase") ||
+      to.startsWith("Gateway") ||
+      to.startsWith("Toilet") ||
+      to === end;
+
+    if (isImportant || direction !== "Go") {
+      steps.push({ node: to, direction });
+    }
+  }
+
+  // Speak the steps sequentially
   let i = 0;
   const stepInterval = setInterval(() => {
-    if (i >= path.length) {
-      speak("You have arrived at your destination");
+    if (i >= steps.length) {
+      speak(`You have arrived at ${end}`);
       clearInterval(stepInterval);
       return;
     }
-    speak(`Next: ${path[i]}`);
+    speak(`${steps[i].direction} to ${steps[i].node}`);
     i++;
   }, 4000);
 }
+
 
 function getShortestDistance(start, end) {
   const graph = buildGraph(mapData.edges);
