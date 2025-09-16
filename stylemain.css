@@ -39,7 +39,7 @@ h1 {
 #reader video {
   display: block;
   width: 100%;
-  height: auto;
+  height: 300px;
 }
 
 #overlay {
@@ -141,3 +141,4 @@ button {
   font-size: 1.2em;
   font-family: "Funnel Sans", sans-serif;
 }
+
