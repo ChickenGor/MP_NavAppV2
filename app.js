@@ -1,6 +1,7 @@
 let mapData = {};
 let currentLocation = null;
 let destination = null;
+let lastScanned = null; // track last scanned QR
 
 const qrPhysicalSizeCm = 10;
 const focalLengthPx = 800;
@@ -10,8 +11,6 @@ const voiceBtn = document.getElementById("voiceBtn");
 const voiceText = document.getElementById("voiceText");
 
 let recognition;
-let lastScanned = null;
-let micStream = null;
 
 // =================== MAP LOADING ===================
 fetch("map-data.json")
@@ -28,24 +27,19 @@ fetch("map-data.json")
 
 // =================== VOICE FEEDBACK ===================
 function speak(text) {
-  console.log("🔊 Speak:", text);
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = "en-US";
   speechSynthesis.speak(utter);
-}
-
-// =================== QR DISTANCE ESTIMATION ===================
-function estimateDistance(pixelWidth) {
-  return (qrPhysicalSizeCm * focalLengthPx) / pixelWidth;
+  console.log("🔊 Speak:", text);
 }
 
 // =================== LOCATION NORMALISER ===================
 function normaliseLocation(str) {
   return str
     .toLowerCase()
-    .replace(/i want to go to|take me to|bring me to|go to|nearest/g, "") // remove common phrases
-    .replace(/and|end|add/g, "n") // fix mishearing of "N"
-    .replace(/[^a-z0-9]/g, ""); // strip spaces/punctuation
+    .replace(/i want to go to|take me to|bring me to|go to|nearest/g, "")
+    .replace(/and|end|add/g, "n")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 // =================== GRAPH BUILDER ===================
@@ -96,6 +90,21 @@ function dijkstra(graph, start, end) {
   return path;
 }
 
+// =================== DISTANCE ===================
+function getShortestDistance(start, end) {
+  const graph = buildGraph(mapData.edges);
+  const path = dijkstra(graph, start, end);
+  if (path.length < 2) return Infinity;
+  let distance = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const fromPos = mapData.nodes[path[i]] || mapData.turnPoints[path[i]];
+    const toPos = mapData.nodes[path[i + 1]] || mapData.turnPoints[path[i + 1]];
+    distance += Math.hypot(fromPos.x - toPos.x, fromPos.y - toPos.y);
+  }
+  return distance;
+}
+
+// =================== NAVIGATION ===================
 function findShortestPath(start, end) {
   const graph = buildGraph(mapData.edges);
   const path = dijkstra(graph, start, end);
@@ -111,34 +120,28 @@ function findShortestPath(start, end) {
     const fromPos = mapData.nodes[from] || mapData.turnPoints[from];
     const toPos = mapData.nodes[to] || mapData.turnPoints[to];
 
-    // Determine direction
     let direction = "Go";
     if (i < path.length - 2) {
       const next = path[i + 2];
       const nextPos = mapData.nodes[next] || mapData.turnPoints[next];
-
-      const angle = Math.atan2(nextPos.y - toPos.y, nextPos.x - toPos.x) -
-                    Math.atan2(toPos.y - fromPos.y, toPos.x - fromPos.x);
+      const angle =
+        Math.atan2(nextPos.y - toPos.y, nextPos.x - toPos.x) -
+        Math.atan2(toPos.y - fromPos.y, toPos.x - fromPos.x);
       const deg = (angle * 180) / Math.PI;
-
       if (deg > 45) direction = "Turn left";
       else if (deg < -45) direction = "Turn right";
       else direction = "Go straight";
     }
 
-    // Only announce meaningful steps (turns, stairs, or destination)
     const isImportant =
       to.startsWith("Staircase") ||
       to.startsWith("Gateway") ||
       to.startsWith("Toilet") ||
       to === end;
 
-    if (isImportant || direction !== "Go") {
-      steps.push({ node: to, direction });
-    }
+    if (isImportant || direction !== "Go") steps.push({ node: to, direction });
   }
 
-  // Speak the steps sequentially
   let i = 0;
   const stepInterval = setInterval(() => {
     if (i >= steps.length) {
@@ -151,22 +154,6 @@ function findShortestPath(start, end) {
   }, 4000);
 }
 
-
-function getShortestDistance(start, end) {
-  const graph = buildGraph(mapData.edges);
-  const path = dijkstra(graph, start, end);
-  if (path.length < 2) return Infinity; // no path
-  let distance = 0;
-  for (let i = 0; i < path.length - 1; i++) {
-    const from = path[i];
-    const to = path[i + 1];
-    const fromPos = mapData.nodes[from] || mapData.turnPoints[from];
-    const toPos = mapData.nodes[to] || mapData.turnPoints[to];
-    distance += Math.hypot(fromPos.x - toPos.x, fromPos.y - toPos.y);
-  }
-  return distance;
-}
-
 // =================== VOICE RECOGNITION ===================
 if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   const SpeechRecognition =
@@ -177,7 +164,7 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   recognition.lang = "en-US";
   recognition.interimResults = false;
 
-  let recognizing = false; // track state
+  let recognizing = false;
 
   recognition.onstart = () => {
     recognizing = true;
@@ -186,10 +173,9 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   };
 
   recognition.onend = () => {
-  recognizing = false;
-  voiceBtn.classList.remove("listening");
-  // DO NOT clear voiceText here
-};
+    recognizing = false;
+    voiceBtn.classList.remove("listening");
+  };
 
   recognition.onerror = (e) => {
     console.error("❌ Voice recognition error:", e);
@@ -223,27 +209,17 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     }
   };
 
-  // =================== BUTTON HANDLER ===================
-  if (voiceBtn) {
-    voiceBtn.addEventListener("click", () => {
-      if (recognizing) {
-        recognition.stop(); // stop if already listening
-        return;
-      }
-
-      try {
-        recognition.start(); // start recognition
-      } catch (err) {
-        console.error("❌ Failed to start recognition:", err);
-        voiceText.innerText = "Microphone error!";
-        speak("Please allow microphone access and reload the page");
-      }
-    });
-  } else {
-    console.error("❌ voiceBtn not found in DOM!");
-  }
+  voiceBtn?.addEventListener("click", () => {
+    if (recognizing) return recognition.stop();
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error("❌ Failed to start recognition:", err);
+      voiceText.innerText = "Microphone error!";
+      speak("Please allow microphone access and reload the page");
+    }
+  });
 }
-
 
 // =================== SYNONYMS ===================
 const synonyms = {
@@ -252,32 +228,10 @@ const synonyms = {
   Staircase2: ["staircase 2", "stairs 2", "middle stairs"],
   Staircase3: ["staircase 3", "stairs 3", "far stairs"],
   Staircase4: ["staircase 4", "stairs 4", "near gateway a stairs"],
-  MaleToilet1: [
-    "male toilet 1",
-    "mens toilet 1",
-    "men's toilet 1",
-    "toilet male 1",
-    "mail toilet 1",
-  ],
-  MaleToilet2: [
-    "male toilet 2",
-    "mens toilet 2",
-    "men's toilet 2",
-    "toilet male 2",
-    "mail toilet 2",
-  ],
-  FemaleToilet1: [
-    "female toilet 1",
-    "ladies toilet 1",
-    "women toilet 1",
-    "toilet female 1",
-  ],
-  FemaleToilet2: [
-    "female toilet 2",
-    "ladies toilet 2",
-    "women toilet 2",
-    "toilet female 2",
-  ],
+  MaleToilet1: ["male toilet 1", "mens toilet 1", "men's toilet 1"],
+  MaleToilet2: ["male toilet 2", "mens toilet 2", "men's toilet 2"],
+  FemaleToilet1: ["female toilet 1", "ladies toilet 1", "women toilet 1"],
+  FemaleToilet2: ["female toilet 2", "ladies toilet 2", "women toilet 2"],
   OliveCafe: ["olive cafe", "olive cafeteria", "olive"],
   PanasExpress: ["panas express", "panas", "express cafe"],
   GatewayA: ["gateway a", "entrance a", "exit a"],
@@ -289,28 +243,21 @@ const synonyms = {
 };
 
 function resolveSynonym(inputKey, normalisedKeys, currentNode) {
-  // direct match
   if (normalisedKeys[inputKey]) return normalisedKeys[inputKey];
 
-  // normalize synonyms
   for (let canonical in synonyms) {
     const normalizedSyns = synonyms[canonical].map(normaliseLocation);
-
     if (normalizedSyns.some((alt) => inputKey.includes(alt))) {
-      // grouped categories
-      if (["MaleToilet1", "MaleToilet2"].includes(canonical)) {
+      if (["MaleToilet1", "MaleToilet2"].includes(canonical))
         return findNearestNode("maletoilet", currentNode);
-      }
-      if (["FemaleToilet1", "FemaleToilet2"].includes(canonical)) {
+      if (["FemaleToilet1", "FemaleToilet2"].includes(canonical))
         return findNearestNode("femaletoilet", currentNode);
-      }
       if (
         ["Staircase1", "Staircase2", "Staircase3", "Staircase4"].includes(
           canonical
         )
-      ) {
+      )
         return findNearestNode("staircase", currentNode);
-      }
       return normalisedKeys[canonical] || canonical;
     }
   }
@@ -319,22 +266,18 @@ function resolveSynonym(inputKey, normalisedKeys, currentNode) {
 
 function findNearestNode(category, currentNode) {
   let candidates = [];
-
-  if (category === "maletoilet") {
-    candidates = ["MaleToilet1", "MaleToilet2"];
-  } else if (category === "femaletoilet") {
+  if (category === "maletoilet") candidates = ["MaleToilet1", "MaleToilet2"];
+  else if (category === "femaletoilet")
     candidates = ["FemaleToilet1", "FemaleToilet2"];
-  } else if (category === "staircase") {
+  else if (category === "staircase")
     candidates = ["Staircase1", "Staircase2", "Staircase3", "Staircase4"];
-  }
 
   if (!currentNode || candidates.length === 0) return null;
 
   let nearest = null;
   let minDistance = Infinity;
-
   for (let node of candidates) {
-    const distance = getShortestDistance(currentNode, node);
+    const distance = getShortestDistance(currentLocation, node);
     if (distance < minDistance) {
       minDistance = distance;
       nearest = node;
@@ -349,23 +292,18 @@ function playScanSound() {
   scanSound.play();
 }
 
-// =================== QR SCANNER (OpenCV.js) ===================
+// =================== QR SCANNER ===================
 window.addEventListener("load", () => {
-  console.log("Initializing QR Scanner...");
-
-  cv["onRuntimeInitialized"] = () => {
-    console.log("OpenCV ready, starting camera...");
+  cv.onRuntimeInitialized = () => {
     const qrDecoder = new cv.QRCodeDetector();
-
     const video = document.createElement("video");
-    video.setAttribute("autoplay", true);
-    video.setAttribute("playsinline", true);
+    video.autoplay = true;
+    video.playsInline = true;
     document.getElementById("reader").appendChild(video);
 
     const overlay = document.getElementById("overlay");
     const ctx = overlay.getContext("2d");
 
-    // hidden canvas
     const hiddenCanvas = document.createElement("canvas");
     const hiddenCtx = hiddenCanvas.getContext("2d");
 
@@ -379,18 +317,14 @@ window.addEventListener("load", () => {
       })
       .then((stream) => {
         video.srcObject = stream;
-
         video.addEventListener("playing", () => {
-          console.log("📷 Camera stream ready.");
           hiddenCanvas.width = video.videoWidth;
           hiddenCanvas.height = video.videoHeight;
           overlay.width = video.videoWidth;
           overlay.height = video.videoHeight;
-
           processFrame();
         });
-      })
-      .catch((err) => console.error("Camera error:", err));
+      });
 
     function processFrame() {
       if (!video || video.readyState !== 4) {
@@ -400,8 +334,6 @@ window.addEventListener("load", () => {
 
       hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
       let src = cv.imread(hiddenCanvas);
-
-      // grayscale
       let gray = new cv.Mat();
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
@@ -409,106 +341,37 @@ window.addEventListener("load", () => {
       let straightQr = new cv.Mat();
       let decodedText = qrDecoder.detectAndDecode(gray, points, straightQr);
 
-      // AUTO-ZOOM CROP
-      if (!decodedText && points.rows > 0) {
-        let minX = Infinity,
-          minY = Infinity,
-          maxX = -Infinity,
-          maxY = -Infinity;
-        for (let i = 0; i < points.data32F.length; i += 2) {
-          let x = points.data32F[i];
-          let y = points.data32F[i + 1];
-          minX = Math.min(minX, x);
-          minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x);
-          maxY = Math.max(maxY, y);
-        }
-
-        let margin = 20;
-        minX = Math.max(minX - margin, 0);
-        minY = Math.max(minY - margin, 0);
-        maxX = Math.min(maxX + margin, gray.cols);
-        maxY = Math.min(maxY + margin, gray.rows);
-
-        let rect = new cv.Rect(minX, minY, maxX - minX, maxY - minY);
-        let cropped = gray.roi(rect);
-
-        let zoomed = new cv.Mat();
-        cv.resize(
-          cropped,
-          zoomed,
-          new cv.Size(cropped.cols * 3, cropped.rows * 3),
-          0,
-          0,
-          cv.INTER_CUBIC
-        );
-
-        decodedText = qrDecoder.detectAndDecode(zoomed, points, straightQr);
-
-        cropped.delete();
-        zoomed.delete();
-      }
-
-      // FALLBACKS
-      if (!decodedText) {
-        let thresh = new cv.Mat();
-        cv.equalizeHist(gray, thresh);
-        cv.GaussianBlur(thresh, thresh, new cv.Size(3, 3), 0);
-        cv.adaptiveThreshold(
-          thresh,
-          thresh,
-          255,
-          cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-          cv.THRESH_BINARY,
-          11,
-          2
-        );
-        decodedText = qrDecoder.detectAndDecode(thresh, points, straightQr);
-        thresh.delete();
-      }
-
-      if (!decodedText) {
-        let enlarged = new cv.Mat();
-        cv.resize(
-          gray,
-          enlarged,
-          new cv.Size(gray.cols * 2, gray.rows * 2),
-          0,
-          0,
-          cv.INTER_CUBIC
-        );
-        decodedText = qrDecoder.detectAndDecode(enlarged, points, straightQr);
-        enlarged.delete();
-      }
-
       ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-      if (decodedText && decodedText !== lastScanned) {
-        lastScanned = decodedText;
-        console.log("✅ QR detected:", decodedText);
+      if (decodedText) {
+        // Only trigger if different from lastScanned
+        if (decodedText !== lastScanned) {
+          lastScanned = decodedText;
+          currentLocation = decodedText; // update current location immediately
+          playScanSound();
 
-        playScanSound?.();
-
-        if (points.rows > 0) {
-          ctx.beginPath();
-          ctx.strokeStyle = "lime";
-          ctx.lineWidth = 4;
-          ctx.moveTo(points.data32F[0], points.data32F[1]);
-          for (let i = 2; i < points.data32F.length; i += 2) {
-            ctx.lineTo(points.data32F[i], points.data32F[i + 1]);
+          if (points.rows > 0) {
+            ctx.beginPath();
+            ctx.strokeStyle = "lime";
+            ctx.lineWidth = 4;
+            ctx.moveTo(points.data32F[0], points.data32F[1]);
+            for (let i = 2; i < points.data32F.length; i += 2) {
+              ctx.lineTo(points.data32F[i], points.data32F[i + 1]);
+            }
+            ctx.closePath();
+            ctx.stroke();
           }
-          ctx.closePath();
-          ctx.stroke();
+
+          document.getElementById(
+            "distanceInfo"
+          ).innerText = `QR: ${decodedText}`;
+          speak(`You are at ${decodedText}`);
+
+          // Reset lastScanned after 3 seconds to allow re-scan
+          setTimeout(() => {
+            lastScanned = null;
+          }, 3000);
         }
-
-        document.getElementById(
-          "distanceInfo"
-        ).innerText = `QR: ${decodedText}`;
-
-        speak?.(`You are at ${decodedText}`);
-        currentLocation = decodedText; // ✅ update current location
-
-        setTimeout(() => (lastScanned = null), 3000);
       }
 
       src.delete();
