@@ -112,6 +112,22 @@ function findShortestPath(start, end) {
   }, 4000);
 }
 
+function getShortestDistance(start, end) {
+  const graph = buildGraph(mapData.edges);
+  const path = dijkstra(graph, start, end);
+  if (path.length < 2) return Infinity; // no path
+  let distance = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const from = path[i];
+    const to = path[i + 1];
+    const fromPos = mapData.nodes[from] || mapData.turnPoints[from];
+    const toPos = mapData.nodes[to] || mapData.turnPoints[to];
+    distance += Math.hypot(fromPos.x - toPos.x, fromPos.y - toPos.y);
+  }
+  return distance;
+}
+
+
 // =================== VOICE RECOGNITION ===================
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -167,13 +183,17 @@ const synonyms = {
   "femaletoilet": ["womenstoilet", "womentoilet", "femalerestroom"]
 };
 
-function resolveSynonym(inputKey, normalisedKeys) {
+function resolveSynonym(inputKey, normalisedKeys, currentNode) {
   // direct match
   if (normalisedKeys[inputKey]) return normalisedKeys[inputKey];
 
   // check synonyms
   for (let canonical in synonyms) {
     if (synonyms[canonical].some(alt => inputKey.includes(alt))) {
+      // If this is a group (toilet/staircase), find nearest
+      if (canonical === "maletoilet" || canonical === "staircase") {
+        return findNearestNode(canonical, currentNode);
+      }
       return normalisedKeys[canonical] || canonical;
     }
   }
@@ -187,6 +207,33 @@ function normaliseLocation(str) {
     .replace(/i want to go to|take me to|bring me to|go to|nearest/g, '') // remove common phrases
     .replace(/and|end|add/g, 'n') // your mishearing fix
     .replace(/[^a-z0-9]/g, '');   // strip spaces/punctuation
+}
+
+function findNearestNode(category, currentNode) {
+  let candidates = [];
+
+  if (category === "maletoilet") {
+    candidates = ["MaleToilet1", "MaleToilet2"];
+  } else if (category === "femaletoilet") {
+    candidates = ["FemaleToilet1", "FemaleToilet2"];
+  } else if (category === "staircase") {
+    candidates = ["Staircase1", "Staircase2", "Staircase3", "Staircase4"];
+  }
+
+  if (!currentNode || candidates.length === 0) return null;
+
+  let nearest = null;
+  let minDistance = Infinity;
+
+  for (let node of candidates) {
+    const distance = getShortestDistance(currentNode, node);
+    if (distance < minDistance) {
+      minDistance = distance;
+      nearest = node;
+    }
+  }
+
+  return nearest;
 }
 
 
