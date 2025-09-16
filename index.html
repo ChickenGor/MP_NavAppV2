@@ -14,26 +14,28 @@
 
   <div class="mobile-container">
     <h1>Indoor Navigation</h1>
+
     <div id="reader" style="position: relative;">
-      <canvas id="overlay" style="position:absolute;top:0;left:0;"></canvas>
+      <canvas id="overlay"></canvas>
+    </div>
 
-      <div class="bottom-panel">
-        <div class="info-panel">
-          <div id="distanceInfo">Distance: N/A</div>
-          <div id="voiceText">Say something...</div>
-        </div>
-        <button id="voiceBtn">
-          <i class="bi bi-mic-fill"></i>
-        </button>
+    <div class="bottom-panel">
+      <div class="info-panel">
+        <div id="distanceInfo">Distance: N/A</div>
+        <div id="voiceText">Say something...</div>
       </div>
+      <button id="voiceBtn"><i class="bi bi-mic-fill"></i></button>
+    </div>
+  </div>
 
 
 
-      <audio id="scanSound" src="PopAlert.wav" preload="auto"></audio>
 
-      <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
-      <script src="https://unpkg.com/html5-qrcode"></script>
-      <script src="app.js"></script>
+  <audio id="scanSound" src="PopAlert.wav" preload="auto"></audio>
+
+  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="app.js"></script>
 </body>
 
 </html>
