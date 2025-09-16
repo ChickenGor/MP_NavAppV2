@@ -150,10 +150,10 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   };
 
   recognition.onend = () => {
-    recognizing = false;
-    voiceBtn.classList.remove("listening");
-    if (!voiceText.innerText.includes("Error")) voiceText.innerText = "";
-  };
+  recognizing = false;
+  voiceBtn.classList.remove("listening");
+  // DO NOT clear voiceText here
+};
 
   recognition.onerror = (e) => {
     console.error("❌ Voice recognition error:", e);
