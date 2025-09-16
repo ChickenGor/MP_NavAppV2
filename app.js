@@ -457,7 +457,6 @@ window.addEventListener("load", () => {
         ctx.fillRect(10, 10, 220, 30);
         ctx.fillStyle = "white";
         ctx.font = "16px sans-serif";
-        ctx.fillText("Move closer or center QR", 20, 30);
       }
 
       // cleanup
@@ -470,3 +469,4 @@ window.addEventListener("load", () => {
     }
   };
 });
+
