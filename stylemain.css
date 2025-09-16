@@ -13,7 +13,7 @@ body {
 .mobile-container {
   width: 100%;
   max-width: 500px;
-  height: 100vh;
+  height: 90vh;
   display: flex;
   flex-direction: column;
   border-radius: 25px;
@@ -150,3 +150,4 @@ h1 {
   text-align: center;
   margin-bottom: px; /* gap before button */
 }
+
