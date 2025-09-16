@@ -302,9 +302,13 @@ window.addEventListener("load", () => {
     const hiddenCtx = hiddenCanvas.getContext("2d");
 
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment",
-    width: { ideal: 1280 },
-    height: { ideal: 720 }} })
+      .getUserMedia({
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      })
       .then((stream) => {
         video.srcObject = stream;
 
@@ -336,13 +340,57 @@ window.addEventListener("load", () => {
       let gray = new cv.Mat();
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-      // --- Pass 1: raw detection ---
       let points = new cv.Mat();
       let straightQr = new cv.Mat();
       let decodedText = qrDecoder.detectAndDecode(gray, points, straightQr);
 
-      // --- Pass 2: thresholded detection ---
+      // --- AUTO-ZOOM CROP ---
+      if (!decodedText && points.rows > 0) {
+        // Find bounding box
+        let minX = Infinity,
+          minY = Infinity,
+          maxX = -Infinity,
+          maxY = -Infinity;
+        for (let i = 0; i < points.data32F.length; i += 2) {
+          let x = points.data32F[i];
+          let y = points.data32F[i + 1];
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+
+        // Crop with margin
+        let margin = 20;
+        minX = Math.max(minX - margin, 0);
+        minY = Math.max(minY - margin, 0);
+        maxX = Math.min(maxX + margin, gray.cols);
+        maxY = Math.min(maxY + margin, gray.rows);
+
+        let rect = new cv.Rect(minX, minY, maxX - minX, maxY - minY);
+        let cropped = gray.roi(rect);
+
+        // Resize crop (zoom in 3x)
+        let zoomed = new cv.Mat();
+        cv.resize(
+          cropped,
+          zoomed,
+          new cv.Size(cropped.cols * 3, cropped.rows * 3),
+          0,
+          0,
+          cv.INTER_CUBIC
+        );
+
+        // Try decode again
+        decodedText = qrDecoder.detectAndDecode(zoomed, points, straightQr);
+
+        cropped.delete();
+        zoomed.delete();
+      }
+
+      // --- FALLBACKS ---
       if (!decodedText) {
+        // Pass 2: threshold + blur
         let thresh = new cv.Mat();
         cv.equalizeHist(gray, thresh);
         cv.GaussianBlur(thresh, thresh, new cv.Size(3, 3), 0);
@@ -359,8 +407,8 @@ window.addEventListener("load", () => {
         thresh.delete();
       }
 
-      // --- Pass 3: enlarged detection ---
       if (!decodedText) {
+        // Pass 3: enlarge full frame
         let enlarged = new cv.Mat();
         cv.resize(
           gray,
@@ -383,7 +431,7 @@ window.addEventListener("load", () => {
 
         playScanSound?.();
 
-        // draw box around QR
+        // draw green box around QR
         if (points.rows > 0) {
           ctx.beginPath();
           ctx.strokeStyle = "lime";
@@ -396,7 +444,7 @@ window.addEventListener("load", () => {
           ctx.stroke();
         }
 
-        // Example action
+        // Action
         document.getElementById(
           "distanceInfo"
         ).innerText = `QR: ${decodedText}`;
@@ -404,12 +452,12 @@ window.addEventListener("load", () => {
 
         setTimeout(() => (lastScanned = null), 3000);
       } else {
-        // Show gentle hint if nothing detected
+        // Show hint
         ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.fillRect(10, 10, 200, 30);
+        ctx.fillRect(10, 10, 220, 30);
         ctx.fillStyle = "white";
         ctx.font = "16px sans-serif";
-        ctx.fillText("Move closer to QR", 20, 30);
+        ctx.fillText("Move closer or center QR", 20, 30);
       }
 
       // cleanup
