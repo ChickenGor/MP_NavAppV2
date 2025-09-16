@@ -1,7 +1,7 @@
 let mapData = {};
 let currentLocation = null;
 let destination = null;
-let lastScanned = null;
+let lastScanned = null; // track last scanned QR
 
 const qrPhysicalSizeCm = 10;
 const focalLengthPx = 800;
@@ -251,6 +251,8 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   recognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript.trim();
     console.log("🎙 Voice recognized:", transcript);
+
+    // Show what user said
     voiceText.innerText = `You said: ${transcript}`;
     speak(`You said: ${transcript}`);
 
@@ -273,12 +275,6 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     } else {
       speak(`${transcript} is not recognized.`);
     }
-
-    // restore current location after 2s
-    setTimeout(() => {
-      if (!recognizing && currentLocation)
-        voiceText.innerText = `You are at ${currentLocation}`;
-    }, 2000);
   };
 
   voiceBtn?.addEventListener("click", () => {
@@ -286,7 +282,7 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     try {
       recognition.start();
     } catch (err) {
-      console.error(err);
+      console.error("❌ Failed to start recognition:", err);
       voiceText.innerText = "Microphone error!";
       speak("Please allow microphone access and reload the page");
     }
@@ -301,11 +297,9 @@ function playScanSound() {
 
 // =================== QR SCANNER ===================
 window.addEventListener("load", () => {
-  console.log("Initializing QR Scanner...");
-
   cv["onRuntimeInitialized"] = () => {
-    console.log("OpenCV ready, starting camera...");
     const qrDecoder = new cv.QRCodeDetector();
+
     const video = document.createElement("video");
     video.setAttribute("autoplay", true);
     video.setAttribute("playsinline", true);
@@ -358,6 +352,7 @@ window.addEventListener("load", () => {
         lastScanned = decodedText;
         currentLocation = decodedText;
         console.log("✅ QR detected:", decodedText);
+
         playScanSound();
         speak(`You are at ${decodedText}`);
         voiceText.innerText = `You are at ${decodedText}`;
@@ -383,6 +378,7 @@ window.addEventListener("load", () => {
       gray.delete();
       points.delete();
       straightQr.delete();
+
       requestAnimationFrame(processFrame);
     }
   };
