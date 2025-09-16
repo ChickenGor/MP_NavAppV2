@@ -6,14 +6,14 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 90vh;
+  height: 100vh;
   font-family: "Funnel Sans", sans-serif;
 }
 
 .mobile-container {
   width: 100%;
   max-width: 500px;
-  height: 90vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   border-radius: 25px;
@@ -150,6 +150,7 @@ h1 {
   text-align: center;
   margin-bottom: px; /* gap before button */
 }
+
 
 
 
