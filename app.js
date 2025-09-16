@@ -221,6 +221,35 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   });
 }
 
+const micOnSound = document.getElementById("micOnSound");
+const micOffSound = document.getElementById("micOffSound");
+
+recognition.onstart = () => {
+  recognizing = true;
+  voiceBtn.classList.add("listening");
+  voiceText.innerText = "Listening...";
+  
+  // Play "mic on" sound
+  micOnSound.currentTime = 0;
+  micOnSound.play();
+
+  // Optional speech feedback
+  speak("Microphone is now on");
+};
+
+recognition.onend = () => {
+  recognizing = false;
+  voiceBtn.classList.remove("listening");
+  
+  // Play "mic off" sound
+  micOffSound.currentTime = 0;
+  micOffSound.play();
+
+  // Optional speech feedback
+  speak("Microphone is now off");
+};
+
+
 // =================== SYNONYMS ===================
 const synonyms = {
   MainGateway: ["main gateway", "main entrance", "main exit"],
