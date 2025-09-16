@@ -1,24 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Indoor Navigation</title>
   <link rel="stylesheet" href="stylemain.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-
 </head>
-
 <body>
-
   <div class="mobile-container">
     <h1>Indoor Navigation</h1>
 
-    <div id="reader-wrapper" style="position: relative; flex: 1;">
+    <div id="reader-wrapper">
       <div id="reader"></div>
+      <canvas id="overlay"></canvas>
 
-      <!-- Overlay bottom panel on top of video -->
+      <!-- Overlay bottom panel -->
       <div class="bottom-panel">
         <div class="info-panel">
           <div id="distanceInfo">Distance: N/A</div>
@@ -27,14 +24,11 @@
         <button id="voiceBtn"><i class="bi bi-mic-fill"></i></button>
       </div>
     </div>
+
+    <audio id="scanSound" src="PopAlert.wav" preload="auto"></audio>
   </div>
 
-
-  <audio id="scanSound" src="PopAlert.wav" preload="auto"></audio>
-
   <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
-  <script src="https://unpkg.com/html5-qrcode"></script>
   <script src="app.js"></script>
 </body>
-
 </html>
