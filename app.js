@@ -468,13 +468,7 @@ window.addEventListener("load", () => {
         speak?.(`You are at ${decodedText}`);
 
         setTimeout(() => (lastScanned = null), 3000);
-      } else {
-        // Show hint
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.fillRect(10, 10, 220, 30);
-        ctx.fillStyle = "white";
-        ctx.font = "16px sans-serif";
-      }
+      } 
 
       // cleanup
       src.delete();
