@@ -292,9 +292,11 @@ function resolveSynonym(inputKey, normalisedKeys, currentNode) {
   // direct match
   if (normalisedKeys[inputKey]) return normalisedKeys[inputKey];
 
-  // check synonyms
+  // normalize synonyms
   for (let canonical in synonyms) {
-    if (synonyms[canonical].some((alt) => inputKey.includes(alt))) {
+    const normalizedSyns = synonyms[canonical].map(normaliseLocation);
+
+    if (normalizedSyns.some((alt) => inputKey.includes(alt))) {
       // grouped categories
       if (["MaleToilet1", "MaleToilet2"].includes(canonical)) {
         return findNearestNode("maletoilet", currentNode);
