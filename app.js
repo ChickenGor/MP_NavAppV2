@@ -318,38 +318,46 @@ function playScanSound() {
 }
 
 // =================== QR SCANNER ===================
+// =================== QR SCANNER (OpenCV.js) ===================
 window.addEventListener("load", () => {
-  cv.onRuntimeInitialized = () => {
+  console.log("Initializing QR Scanner...");
+
+  cv["onRuntimeInitialized"] = () => {
+    console.log("OpenCV ready, starting camera...");
     const qrDecoder = new cv.QRCodeDetector();
+
     const video = document.createElement("video");
-    video.autoplay = true;
-    video.playsInline = true;
+    video.setAttribute("autoplay", true);
+    video.setAttribute("playsinline", true);
     document.getElementById("reader").appendChild(video);
 
     const overlay = document.getElementById("overlay");
     const ctx = overlay.getContext("2d");
 
+    // hidden canvas
     const hiddenCanvas = document.createElement("canvas");
     const hiddenCtx = hiddenCanvas.getContext("2d");
 
     navigator.mediaDevices
       .getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
       })
       .then((stream) => {
         video.srcObject = stream;
+
         video.addEventListener("playing", () => {
+          console.log("📷 Camera stream ready.");
           hiddenCanvas.width = video.videoWidth;
           hiddenCanvas.height = video.videoHeight;
           overlay.width = video.videoWidth;
           overlay.height = video.videoHeight;
+
           processFrame();
         });
-      });
+      })
+      .catch((err) => console.error("Camera error:", err));
+
+    let lastScanned = null;
 
     function processFrame() {
       if (!video || video.readyState !== 4) {
@@ -359,6 +367,8 @@ window.addEventListener("load", () => {
 
       hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
       let src = cv.imread(hiddenCanvas);
+
+      // grayscale
       let gray = new cv.Mat();
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
@@ -366,37 +376,64 @@ window.addEventListener("load", () => {
       let straightQr = new cv.Mat();
       let decodedText = qrDecoder.detectAndDecode(gray, points, straightQr);
 
+      // Optional: auto-zoom / fallback detection
+      if (!decodedText && points.rows > 0) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (let i = 0; i < points.data32F.length; i += 2) {
+          let x = points.data32F[i], y = points.data32F[i + 1];
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+
+        let margin = 20;
+        minX = Math.max(minX - margin, 0);
+        minY = Math.max(minY - margin, 0);
+        maxX = Math.min(maxX + margin, gray.cols);
+        maxY = Math.min(maxY + margin, gray.rows);
+
+        let rect = new cv.Rect(minX, minY, maxX - minX, maxY - minY);
+        let cropped = gray.roi(rect);
+
+        let zoomed = new cv.Mat();
+        cv.resize(cropped, zoomed, new cv.Size(cropped.cols * 3, cropped.rows * 3), 0, 0, cv.INTER_CUBIC);
+
+        decodedText = qrDecoder.detectAndDecode(zoomed, points, straightQr);
+
+        cropped.delete();
+        zoomed.delete();
+      }
+
+      // Clear overlay
       ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-      if (decodedText) {
-        // Only trigger if different from lastScanned
-        if (decodedText !== lastScanned) {
-          lastScanned = decodedText;
-          currentLocation = decodedText; // update current location immediately
-          playScanSound();
+      if (decodedText && decodedText !== lastScanned) {
+        lastScanned = decodedText;
+        console.log("✅ QR detected:", decodedText);
 
-          if (points.rows > 0) {
-            ctx.beginPath();
-            ctx.strokeStyle = "lime";
-            ctx.lineWidth = 4;
-            ctx.moveTo(points.data32F[0], points.data32F[1]);
-            for (let i = 2; i < points.data32F.length; i += 2) {
-              ctx.lineTo(points.data32F[i], points.data32F[i + 1]);
-            }
-            ctx.closePath();
-            ctx.stroke();
+        playScanSound?.();
+
+        if (points.rows > 0) {
+          ctx.beginPath();
+          ctx.strokeStyle = "lime";
+          ctx.lineWidth = 4;
+          ctx.moveTo(points.data32F[0], points.data32F[1]);
+          for (let i = 2; i < points.data32F.length; i += 2) {
+            ctx.lineTo(points.data32F[i], points.data32F[i + 1]);
           }
-
-          document.getElementById(
-            "distanceInfo"
-          ).innerText = `QR: ${decodedText}`;
-          speak(`You are at ${decodedText}`);
-
-          // Reset lastScanned after 3 seconds to allow re-scan
-          setTimeout(() => {
-            lastScanned = null;
-          }, 3000);
+          ctx.closePath();
+          ctx.stroke();
         }
+
+        document.getElementById("distanceInfo").innerText = `QR: ${decodedText}`;
+
+        // Update current location and announce
+        currentLocation = decodedText;
+        speak(`You are at ${decodedText}`);
+
+        // Wait 3 seconds before allowing same QR again
+        setTimeout(() => { lastScanned = null; }, 3000);
       }
 
       src.delete();
@@ -408,4 +445,3 @@ window.addEventListener("load", () => {
     }
   };
 });
-
