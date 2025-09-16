@@ -135,12 +135,32 @@ function getShortestDistance(start, end) {
 if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   const SpeechRecognition =
     window.SpeechRecognition || window.webkitSpeechRecognition;
+
   recognition = new SpeechRecognition();
   recognition.continuous = false;
   recognition.lang = "en-US";
   recognition.interimResults = false;
 
-  recognition.onresult = function (event) {
+  let recognizing = false; // track state
+
+  recognition.onstart = () => {
+    recognizing = true;
+    voiceBtn.classList.add("listening");
+    voiceText.innerText = "Listening...";
+  };
+
+  recognition.onend = () => {
+    recognizing = false;
+    voiceBtn.classList.remove("listening");
+    if (!voiceText.innerText.includes("Error")) voiceText.innerText = "";
+  };
+
+  recognition.onerror = (e) => {
+    console.error("❌ Voice recognition error:", e);
+    voiceText.innerText = "Error recognizing speech";
+  };
+
+  recognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript.trim();
     voiceText.innerText = transcript;
     speak(`You said: ${transcript}`);
@@ -155,7 +175,7 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     const matchedKey = resolveSynonym(
       normaliseLocation(transcript),
       normalisedKeys,
-      currentLocation // ✅ pass current location
+      currentLocation
     );
 
     if (matchedKey) {
@@ -167,40 +187,27 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     }
   };
 
-  recognition.onend = () => {
-    voiceBtn.classList.remove("listening");
-  };
-
-  recognition.onerror = (e) => {
-    console.error("❌ Voice recognition error:", e);
-    voiceBtn.classList.remove("listening");
-    voiceText.innerText = "Error recognizing speech";
-  };
-
+  // =================== BUTTON HANDLER ===================
   if (voiceBtn) {
-    voiceBtn.addEventListener("click", async () => {
-      voiceBtn.classList.add("listening");
-      voiceText.innerText = "Listening...";
+    voiceBtn.addEventListener("click", () => {
+      if (recognizing) {
+        recognition.stop(); // stop if already listening
+        return;
+      }
 
       try {
-        if (!micStream) {
-          micStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-          });
-          console.log("✅ Microphone granted");
-        }
-        recognition.start();
+        recognition.start(); // start recognition
       } catch (err) {
-        console.error("❌ Microphone access denied:", err);
-        voiceText.innerText = "Microphone blocked!";
+        console.error("❌ Failed to start recognition:", err);
+        voiceText.innerText = "Microphone error!";
         speak("Please allow microphone access and reload the page");
-        voiceBtn.classList.remove("listening");
       }
     });
   } else {
     console.error("❌ voiceBtn not found in DOM!");
   }
 }
+
 
 // =================== SYNONYMS ===================
 const synonyms = {
