@@ -1,6 +1,7 @@
 let mapData = {};
 let currentLocation = null;
 let destination = null;
+
 const qrPhysicalSizeCm = 10;
 const focalLengthPx = 800;
 
@@ -186,11 +187,11 @@ function playScanSound() {
   scanSound.play();
 }
 
-// =================== QR SCANNER (pure OpenCV) ===================
+// =================== QR SCANNER (OpenCV.js) ===================
+
 window.addEventListener('load', () => {
   console.log("Initializing QR Scanner...");
 
-  // Wait for OpenCV
   cv['onRuntimeInitialized'] = () => {
     console.log("OpenCV ready, starting camera...");
     const qrDecoder = new cv.QRCodeDetector();
@@ -203,12 +204,19 @@ window.addEventListener('load', () => {
     const overlay = document.getElementById("overlay");
     const ctx = overlay.getContext("2d");
 
+    // Hidden canvas to grab frames
+    const hiddenCanvas = document.createElement("canvas");
+    const hiddenCtx = hiddenCanvas.getContext("2d");
+
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       .then(stream => {
         video.srcObject = stream;
         video.addEventListener("playing", () => {
+          console.log("Camera stream ready.");
           overlay.width = video.videoWidth;
           overlay.height = video.videoHeight;
+          hiddenCanvas.width = video.videoWidth;
+          hiddenCanvas.height = video.videoHeight;
           processFrame();
         });
       })
@@ -222,16 +230,13 @@ window.addEventListener('load', () => {
 
       ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-      // Capture frame
-      let src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
-      let cap = new cv.VideoCapture(video);
-      cap.read(src);
+      // Capture frame from hidden canvas
+      hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+      let src = cv.imread(hiddenCanvas);
 
-      // Preprocess
+      // Convert to gray (simpler preprocessing)
       let gray = new cv.Mat();
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      cv.GaussianBlur(gray, gray, new cv.Size(3, 3), 0);
-      cv.threshold(gray, gray, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
 
       // Detect QR
       let points = new cv.Mat();
@@ -257,7 +262,7 @@ window.addEventListener('load', () => {
           ctx.stroke();
         }
 
-        // ---- Location + navigation ----
+        // Update UI
         if (mapData.nodes[decodedText] || mapData.turnPoints[decodedText]) {
           currentLocation = decodedText;
           document.getElementById('distanceInfo').innerText = `QR: ${decodedText}`;
@@ -267,9 +272,11 @@ window.addEventListener('load', () => {
           speak(`Unknown QR`);
         }
 
+        // Ask for destination
         speak(`You are at ${decodedText}. Where do you want to go?`);
         if (recognition) recognition.start();
 
+        // Prevent duplicates for 3 sec
         setTimeout(() => lastScanned = null, 3000);
       }
 
@@ -280,5 +287,6 @@ window.addEventListener('load', () => {
     }
   };
 });
+
 
 
