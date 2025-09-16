@@ -148,8 +148,9 @@ h1 {
   font-size: 1.2em;
   font-family: "Funnel Sans", sans-serif;
   text-align: center;
-  margin-bottom: px; /* gap before button */
+  margin-bottom: 3px; /* gap before button */
 }
+
 
 
 
