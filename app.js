@@ -204,19 +204,23 @@ window.addEventListener('load', () => {
     const overlay = document.getElementById("overlay");
     const ctx = overlay.getContext("2d");
 
-    // Hidden canvas to grab frames
+    // hidden canvas to grab frames
     const hiddenCanvas = document.createElement("canvas");
     const hiddenCtx = hiddenCanvas.getContext("2d");
 
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       .then(stream => {
         video.srcObject = stream;
+
         video.addEventListener("playing", () => {
           console.log("Camera stream ready.");
-          overlay.width = video.videoWidth;
-          overlay.height = video.videoHeight;
+
+          // match hidden canvas and overlay to real video resolution
           hiddenCanvas.width = video.videoWidth;
           hiddenCanvas.height = video.videoHeight;
+          overlay.width = video.videoWidth;
+          overlay.height = video.videoHeight;
+
           processFrame();
         });
       })
@@ -228,28 +232,27 @@ window.addEventListener('load', () => {
         return;
       }
 
-      ctx.clearRect(0, 0, overlay.width, overlay.height);
-
-      // Capture frame from hidden canvas
+      // draw video frame into hidden canvas
       hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
       let src = cv.imread(hiddenCanvas);
 
-      // Convert to gray (simpler preprocessing)
+      // grayscale only (no thresholding)
       let gray = new cv.Mat();
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-      // Detect QR
       let points = new cv.Mat();
       let straightQr = new cv.Mat();
       let decodedText = qrDecoder.detectAndDecode(gray, points, straightQr);
 
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+
       if (decodedText && decodedText !== lastScanned) {
         lastScanned = decodedText;
-        console.log("QR detected:", decodedText);
+        console.log("✅ QR detected:", decodedText);
 
-        playScanSound();
+        playScanSound?.();
 
-        // Draw tracking box
+        // draw box
         if (points.rows > 0) {
           ctx.beginPath();
           ctx.strokeStyle = "lime";
@@ -262,25 +265,13 @@ window.addEventListener('load', () => {
           ctx.stroke();
         }
 
-        // Update UI
-        if (mapData.nodes[decodedText] || mapData.turnPoints[decodedText]) {
-          currentLocation = decodedText;
-          document.getElementById('distanceInfo').innerText = `QR: ${decodedText}`;
-          speak(`You are at ${decodedText}`);
-        } else {
-          document.getElementById('distanceInfo').innerText = `Unknown location`;
-          speak(`Unknown QR`);
-        }
+        // example action
+        document.getElementById('distanceInfo').innerText = `QR: ${decodedText}`;
+        speak?.(`You are at ${decodedText}`);
 
-        // Ask for destination
-        speak(`You are at ${decodedText}. Where do you want to go?`);
-        if (recognition) recognition.start();
-
-        // Prevent duplicates for 3 sec
         setTimeout(() => lastScanned = null, 3000);
       }
 
-      // cleanup
       src.delete(); gray.delete(); points.delete(); straightQr.delete();
 
       requestAnimationFrame(processFrame);
