@@ -112,28 +112,6 @@ function findShortestPath(start, end) {
   }, 4000);
 }
 
-// =================== DESTINATION SET BUTTON ===================
-document.getElementById('setDestination').addEventListener('click', () => {
-  const dest = prompt("Enter destination node ID (e.g., N010, OliveCafe):");
-  if (!dest) return;
-
-  const allLocations = { ...mapData.nodes, ...mapData.turnPoints };
-  const normalisedKeys = Object.keys(allLocations).reduce((acc, key) => {
-    acc[normaliseLocation(key)] = key;
-    return acc;
-  }, {});
-  const matchedKey = normalisedKeys[normaliseLocation(dest)];
-
-  if (matchedKey) {
-    destination = matchedKey;
-    speak(`Destination set to ${destination}`);
-    if (currentLocation) findShortestPath(currentLocation, destination);
-    else speak("Scan current location first");
-  } else {
-    speak("Invalid destination");
-  }
-});
-
 // =================== VOICE RECOGNITION ===================
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -153,7 +131,9 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       acc[normaliseLocation(key)] = key;
       return acc;
     }, {});
-    const matchedKey = normalisedKeys[normaliseLocation(transcript)];
+    const matchedKey = resolveSynonym(normaliseLocation(transcript), normalisedKeys);
+
+
 
     if (matchedKey) {
       destination = matchedKey;
@@ -180,6 +160,37 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 } else {
   voiceText.innerText = "Speech recognition not supported";
 }
+
+const synonyms = {
+  "maingateway": ["mainexit", "mainentrance", "gateway", "frontgate"],
+  "maletoilet": ["menstoilet", "mentoilet", "malerestroom"],
+  "femaletoilet": ["womenstoilet", "womentoilet", "femalerestroom"]
+};
+
+function resolveSynonym(inputKey, normalisedKeys) {
+  // direct match
+  if (normalisedKeys[inputKey]) return normalisedKeys[inputKey];
+
+  // check synonyms
+  for (let canonical in synonyms) {
+    if (synonyms[canonical].some(alt => inputKey.includes(alt))) {
+      return normalisedKeys[canonical] || canonical;
+    }
+  }
+  return null;
+}
+
+
+function normaliseLocation(str) {
+  return str
+    .toLowerCase()
+    .replace(/i want to go to|take me to|bring me to|go to|nearest/g, '') // remove common phrases
+    .replace(/and|end|add/g, 'n') // your mishearing fix
+    .replace(/[^a-z0-9]/g, '');   // strip spaces/punctuation
+}
+
+
+
 
 // =================== SOUND ===================
 function playScanSound() {
