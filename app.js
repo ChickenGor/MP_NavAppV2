@@ -322,7 +322,7 @@ window.addEventListener("load", () => {
       .getUserMedia({
         video: {
           facingMode: "environment",
-          width: { ideal: 1280 },
+          width: { ideal: 960 },
           height: { ideal: 720 },
         },
       })
@@ -480,3 +480,4 @@ window.addEventListener("load", () => {
     }
   };
 });
+
