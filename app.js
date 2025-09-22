@@ -153,7 +153,7 @@ function findShortestPath(start, end) {
     }
     speak(`${steps[i].direction} to ${steps[i].node}`);
     i++;
-  }, 4000);
+  }, 10000);
 }
 
 // =================== SYNONYMS ===================
